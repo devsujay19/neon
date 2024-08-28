@@ -80,6 +80,14 @@ pub(crate) trait TestBackend: Send + Sync + 'static {
     fn get_allowed_ips_and_secret(
         &self,
     ) -> Result<(CachedAllowedIps, Option<CachedRoleSecret>), console::errors::GetAuthInfoError>;
+    fn dyn_clone(&self) -> Box<dyn TestBackend>;
+}
+
+#[cfg(test)]
+impl Clone for Box<dyn TestBackend> {
+    fn clone(&self) -> Self {
+        TestBackend::dyn_clone(&**self)
+    }
 }
 
 impl std::fmt::Display for Backend<'_, (), ()> {
@@ -560,7 +568,7 @@ mod tests {
         stream::{PqStream, Stream},
     };
 
-    use super::{auth_quirks, AuthRateLimiter};
+    use super::{auth_quirks, jwt::JwkCache, AuthRateLimiter};
 
     struct Auth {
         ips: Vec<IpPattern>,
@@ -598,6 +606,7 @@ mod tests {
     }
 
     static CONFIG: Lazy<AuthenticationConfig> = Lazy::new(|| AuthenticationConfig {
+        jwks_cache: JwkCache::default(),
         thread_pool: ThreadPool::new(1),
         scram_protocol_timeout: std::time::Duration::from_secs(5),
         rate_limiter_enabled: true,

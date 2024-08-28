@@ -5,7 +5,10 @@ pub mod neon;
 use super::messages::{ConsoleError, MetricsAuxInfo};
 use crate::{
     auth::{
-        backend::{ComputeCredentialKeys, ComputeUserInfo},
+        backend::{
+            jwt::{AuthRule, FetchAuthRules},
+            ComputeCredentialKeys, ComputeUserInfo,
+        },
         IpPattern,
     },
     cache::{endpoints::EndpointsCache, project_info::ProjectInfoCacheImpl, Cached, TimedLru},
@@ -342,6 +345,7 @@ pub(crate) trait Api {
 }
 
 #[non_exhaustive]
+#[derive(Clone)]
 pub enum ConsoleBackend {
     /// Current Cloud API (V2).
     Console(neon::Api),
@@ -549,5 +553,11 @@ impl WakeComputePermit {
             Err(_) => self.release(Outcome::Overload),
         }
         res
+    }
+}
+
+impl FetchAuthRules for ConsoleBackend {
+    async fn fetch_auth_rules(&self, _role_name: crate::RoleName) -> anyhow::Result<Vec<AuthRule>> {
+        todo!()
     }
 }

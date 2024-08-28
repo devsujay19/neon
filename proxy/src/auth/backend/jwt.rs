@@ -36,7 +36,7 @@ pub(crate) struct AuthRule {
 }
 
 #[derive(Default)]
-pub(crate) struct JwkCache {
+pub struct JwkCache {
     client: reqwest::Client,
 
     map: DashMap<(EndpointId, RoleName), Arc<JwkCacheEntryLock>>,

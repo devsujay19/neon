@@ -22,12 +22,13 @@ use tokio::time::Instant;
 use tokio_postgres::config::SslMode;
 use tracing::{debug, error, info, info_span, warn, Instrument};
 
+#[derive(Clone)]
 pub struct Api {
     endpoint: http::Endpoint,
     pub caches: &'static ApiCaches,
     pub(crate) locks: &'static ApiLocks<EndpointCacheKey>,
     pub(crate) wake_compute_endpoint_rate_limiter: Arc<WakeComputeRateLimiter>,
-    jwt: String,
+    jwt: &'static str,
 }
 
 impl Api {
@@ -38,7 +39,10 @@ impl Api {
         locks: &'static ApiLocks<EndpointCacheKey>,
         wake_compute_endpoint_rate_limiter: Arc<WakeComputeRateLimiter>,
     ) -> Self {
-        let jwt = std::env::var("NEON_PROXY_TO_CONTROLPLANE_TOKEN").unwrap_or_default();
+        let jwt = match std::env::var("NEON_PROXY_TO_CONTROLPLANE_TOKEN") {
+            Ok(v) => String::leak(v),
+            Err(_) => "",
+        };
         Self {
             endpoint,
             caches,
