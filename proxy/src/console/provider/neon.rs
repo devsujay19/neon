@@ -169,9 +169,17 @@ impl Api {
 
             let body = parse_body::<EndpointJwksResponse>(response).await?;
 
-            todo!();
+            let rules = body
+                .jwks
+                .into_iter()
+                .map(|jwks| AuthRule {
+                    id: jwks.id,
+                    jwks_url: jwks.jwks_url,
+                    audience: jwks.jwt_audience,
+                })
+                .collect();
 
-            Ok(vec![])
+            Ok(rules)
         }
         .map_err(crate::error::log_error)
         .instrument(info_span!("http", id = request_id))

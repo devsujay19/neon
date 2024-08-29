@@ -177,11 +177,11 @@ impl super::Api for Api {
 
     async fn get_endpoint_jwks(
         &self,
-        ctx: &RequestMonitoring,
-        endpoint: EndpointId,
-        role_name: crate::RoleName,
+        _ctx: &RequestMonitoring,
+        _endpoint: EndpointId,
+        _role_name: crate::RoleName,
     ) -> anyhow::Result<Vec<crate::auth::backend::jwt::AuthRule>> {
-        todo!()
+        unimplemented!()
     }
 
     #[tracing::instrument(skip_all)]
