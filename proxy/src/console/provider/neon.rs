@@ -7,15 +7,16 @@ use super::{
     NodeInfo,
 };
 use crate::{
-    auth::backend::ComputeUserInfo,
+    auth::backend::{jwt::AuthRule, ComputeUserInfo},
     compute,
-    console::messages::{ColdStartInfo, Reason},
+    console::messages::{ColdStartInfo, EndpointJwksResponse, Reason},
     http,
     metrics::{CacheOutcome, Metrics},
     rate_limiter::WakeComputeRateLimiter,
-    scram, EndpointCacheKey,
+    scram, EndpointCacheKey, EndpointId, RoleName,
 };
 use crate::{cache::Cached, context::RequestMonitoring};
+use anyhow::bail;
 use futures::TryFutureExt;
 use std::{sync::Arc, time::Duration};
 use tokio::time::Instant;
@@ -123,6 +124,54 @@ impl Api {
                 allowed_ips,
                 project_id: body.project_id,
             })
+        }
+        .map_err(crate::error::log_error)
+        .instrument(info_span!("http", id = request_id))
+        .await
+    }
+
+    async fn do_get_endpoint_jwks(
+        &self,
+        ctx: &RequestMonitoring,
+        endpoint: EndpointId,
+        role: RoleName,
+    ) -> anyhow::Result<Vec<AuthRule>> {
+        if !self
+            .caches
+            .endpoints_cache
+            .is_valid(ctx, &endpoint.normalize())
+            .await
+        {
+            bail!("endpoint not found");
+        }
+        let request_id = ctx.session_id().to_string();
+        async {
+            let request = self
+                .endpoint
+                .get2(|url| {
+                    url.path_segments_mut()
+                        .push("endpoints")
+                        .push(endpoint.as_str())
+                        .push("jwks");
+                })
+                .header("X-Request-ID", &request_id)
+                .header("Authorization", format!("Bearer {}", &self.jwt))
+                .query(&[("session_id", ctx.session_id())])
+                .query(&[("role", role.as_str())])
+                .build()?;
+
+            info!(url = request.url().as_str(), "sending http request");
+            let start = Instant::now();
+            let pause = ctx.latency_timer_pause(crate::metrics::Waiting::Cplane);
+            let response = self.endpoint.execute(request).await?;
+            drop(pause);
+            info!(duration = ?start.elapsed(), "received http response");
+
+            let body = parse_body::<EndpointJwksResponse>(response).await?;
+
+            todo!();
+
+            Ok(vec![])
         }
         .map_err(crate::error::log_error)
         .instrument(info_span!("http", id = request_id))
@@ -264,6 +313,16 @@ impl super::Api for Api {
             Cached::new_uncached(allowed_ips),
             Some(Cached::new_uncached(auth_info.secret)),
         ))
+    }
+
+    #[tracing::instrument(skip_all)]
+    async fn get_endpoint_jwks(
+        &self,
+        ctx: &RequestMonitoring,
+        endpoint: EndpointId,
+        role: RoleName,
+    ) -> anyhow::Result<Vec<AuthRule>> {
+        self.do_get_endpoint_jwks(ctx, endpoint, role).await
     }
 
     #[tracing::instrument(skip_all)]

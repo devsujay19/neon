@@ -596,6 +596,15 @@ mod tests {
             ))
         }
 
+        async fn get_endpoint_jwks(
+            &self,
+            _ctx: &RequestMonitoring,
+            _endpoint: crate::EndpointId,
+            _role_name: crate::RoleName,
+        ) -> anyhow::Result<Vec<super::jwt::AuthRule>> {
+            unimplemented!()
+        }
+
         async fn wake_compute(
             &self,
             _ctx: &RequestMonitoring,

@@ -19,7 +19,7 @@ use crate::{
     intern::ProjectIdInt,
     metrics::ApiLockMetrics,
     rate_limiter::{DynamicLimiter, Outcome, RateLimiterConfig, Token},
-    scram, EndpointCacheKey,
+    scram, EndpointCacheKey, EndpointId, RoleName,
 };
 use dashmap::DashMap;
 use std::{hash::Hash, sync::Arc, time::Duration};
@@ -336,6 +336,13 @@ pub(crate) trait Api {
         user_info: &ComputeUserInfo,
     ) -> Result<(CachedAllowedIps, Option<CachedRoleSecret>), errors::GetAuthInfoError>;
 
+    async fn get_endpoint_jwks(
+        &self,
+        ctx: &RequestMonitoring,
+        endpoint: EndpointId,
+        role_name: RoleName,
+    ) -> anyhow::Result<Vec<AuthRule>>;
+
     /// Wake up the compute node and return the corresponding connection info.
     async fn wake_compute(
         &self,
@@ -386,6 +393,21 @@ impl Api for ConsoleBackend {
             Self::Postgres(api) => api.get_allowed_ips_and_secret(ctx, user_info).await,
             #[cfg(test)]
             Self::Test(api) => api.get_allowed_ips_and_secret(),
+        }
+    }
+
+    async fn get_endpoint_jwks(
+        &self,
+        ctx: &RequestMonitoring,
+        endpoint: EndpointId,
+        role_name: RoleName,
+    ) -> anyhow::Result<Vec<AuthRule>> {
+        match self {
+            Self::Console(api) => api.get_endpoint_jwks(ctx, endpoint, role_name).await,
+            #[cfg(any(test, feature = "testing"))]
+            Self::Postgres(api) => api.get_endpoint_jwks(ctx, endpoint, role_name).await,
+            #[cfg(test)]
+            Self::Test(_api) => Ok(vec![]),
         }
     }
 
@@ -557,7 +579,12 @@ impl WakeComputePermit {
 }
 
 impl FetchAuthRules for ConsoleBackend {
-    async fn fetch_auth_rules(&self, _role_name: crate::RoleName) -> anyhow::Result<Vec<AuthRule>> {
-        todo!()
+    async fn fetch_auth_rules(
+        &self,
+        ctx: &RequestMonitoring,
+        endpoint: EndpointId,
+        role_name: RoleName,
+    ) -> anyhow::Result<Vec<AuthRule>> {
+        self.get_endpoint_jwks(ctx, endpoint, role_name).await
     }
 }

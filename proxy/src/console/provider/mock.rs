@@ -175,6 +175,15 @@ impl super::Api for Api {
         ))
     }
 
+    async fn get_endpoint_jwks(
+        &self,
+        ctx: &RequestMonitoring,
+        endpoint: EndpointId,
+        role_name: crate::RoleName,
+    ) -> anyhow::Result<Vec<crate::auth::backend::jwt::AuthRule>> {
+        todo!()
+    }
+
     #[tracing::instrument(skip_all)]
     async fn wake_compute(
         &self,

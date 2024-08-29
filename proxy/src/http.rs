@@ -87,8 +87,16 @@ impl Endpoint {
     /// Return a [builder](RequestBuilder) for a `GET` request,
     /// appending a single `path` segment to the base endpoint URL.
     pub(crate) fn get(&self, path: &str) -> RequestBuilder {
+        self.get2(|u| {
+            u.path_segments_mut().push(path);
+        })
+    }
+
+    /// Return a [builder](RequestBuilder) for a `GET` request,
+    /// appending a single `path` segment to the base endpoint URL.
+    pub(crate) fn get2(&self, f: impl for<'a> FnOnce(&'a mut ApiUrl)) -> RequestBuilder {
         let mut url = self.endpoint.clone();
-        url.path_segments_mut().push(path);
+        f(&mut url);
         self.client.get(url.into_inner())
     }
 
