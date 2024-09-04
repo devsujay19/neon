@@ -1,17 +1,12 @@
 import os
 
 from fixtures.log_helper import log
-from fixtures.neon_fixtures import NeonEnv, fork_at_current_lsn
+from fixtures.neon_fixtures import NeonEnv, fork_at_current_lsn, wait_for_last_flush_lsn
 
 
-#
-# Test branching, when a transaction is in prepared state
-#
-def test_twophase(neon_simple_env: NeonEnv):
-    env = neon_simple_env
-    env.neon_cli.create_branch("test_twophase", "empty")
+def twophase_test_on_timeline(env: NeonEnv):
     endpoint = env.endpoints.create_start(
-        "test_twophase", config_lines=["max_prepared_transactions=5"]
+        "test_twophase", config_lines=["max_prepared_transactions=5", "log_statement=all"]
     )
 
     conn = endpoint.connect()
@@ -61,7 +56,7 @@ def test_twophase(neon_simple_env: NeonEnv):
     # Start compute on the new branch
     endpoint2 = env.endpoints.create_start(
         "test_twophase_prepared",
-        config_lines=["max_prepared_transactions=5"],
+        config_lines=["max_prepared_transactions=5", "log_statement=all"],
     )
 
     # Check that we restored only needed twophase files
@@ -83,3 +78,39 @@ def test_twophase(neon_simple_env: NeonEnv):
     # Only one committed insert is visible on the original branch
     cur.execute("SELECT * FROM foo")
     assert cur.fetchall() == [("three",)]
+
+
+def test_twophase(neon_simple_env: NeonEnv):
+    """
+    Test branching, when a transaction is in prepared state
+    """
+    env = neon_simple_env
+    env.neon_cli.create_branch("test_twophase", "empty")
+
+    twophase_test_on_timeline(env)
+
+
+def test_twophase_at_wal_segment_start(neon_simple_env: NeonEnv):
+    """
+    Same as 'test_twophase' test, but the server is started at an LSN at the beginning
+    of a WAL segment. We had a bug where we didn't initialize the "long XLOG page header"
+    at the beginning of the segment correctly, which was detected when the checkpointer
+    tried to read the XLOG_XACT_PREPARE record from the WAL, if that record was on the
+    very first page of a WAL segment and the server was started up at that first page.
+    """
+    env = neon_simple_env
+    timeline_id = env.neon_cli.create_branch("test_twophase", "empty")
+
+    endpoint = env.endpoints.create_start(
+        "test_twophase", config_lines=["max_prepared_transactions=5", "log_statement=all"]
+    )
+    endpoint.safe_psql("SELECT pg_switch_wal()")
+
+    # FIXME: this is only needed work around bug https://github.com/neondatabase/neon/issues/8911.
+    # Once that's fixed, this can be removed.
+    endpoint.safe_psql("SELECT pg_current_xact_id()")
+    wait_for_last_flush_lsn(env, endpoint, env.initial_tenant, timeline_id)
+
+    endpoint.stop_and_destroy()
+
+    twophase_test_on_timeline(env)
