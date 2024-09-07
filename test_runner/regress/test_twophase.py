@@ -106,11 +106,6 @@ def test_twophase_at_wal_segment_start(neon_simple_env: NeonEnv):
     )
     endpoint.safe_psql("SELECT pg_switch_wal()")
 
-    # FIXME: this is only needed work around bug https://github.com/neondatabase/neon/issues/8911.
-    # Once that's fixed, this can be removed.
-    endpoint.safe_psql("SELECT pg_current_xact_id()")
-    wait_for_last_flush_lsn(env, endpoint, env.initial_tenant, timeline_id)
-
     endpoint.stop_and_destroy()
 
     twophase_test_on_timeline(env)
