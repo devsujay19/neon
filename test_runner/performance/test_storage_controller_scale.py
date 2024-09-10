@@ -336,7 +336,8 @@ def test_storage_controller_many_tenants(
     # and the storage controller drain and fill API
     log.info("Restarting pageservers...")
     for ps in env.pageservers:
-        log.info(f"Restarting pageserver {ps.id}")
+        log.info(f"Draining pageserver {ps.id}")
+        t1 = time.time()
         env.storage_controller.retryable_node_operation(
             lambda ps_id: env.storage_controller.node_drain(ps_id), ps.id, max_attempts=3, backoff=2
         )
@@ -348,6 +349,7 @@ def test_storage_controller_many_tenants(
             max_attempts=24,
             backoff=5,
         )
+        log.info(f"Drained pageserver {ps.id} in {time.time() - t1}s")
 
         shard_counts = get_consistent_node_shard_counts(env, total_shards)
         log.info(f"Shard counts after draining node {ps.id}: {shard_counts}")
@@ -365,6 +367,7 @@ def test_storage_controller_many_tenants(
             backoff=1,
         )
 
+        log.info(f"Filling pageserver {ps.id}")
         env.storage_controller.retryable_node_operation(
             lambda ps_id: env.storage_controller.node_fill(ps_id), ps.id, max_attempts=3, backoff=2
         )
@@ -375,6 +378,8 @@ def test_storage_controller_many_tenants(
             max_attempts=24,
             backoff=5,
         )
+
+        log.info(f"Filled pageserver {ps.id} in {time.time() - t1}s")
 
         shard_counts = get_consistent_node_shard_counts(env, total_shards)
         log.info(f"Shard counts after filling node {ps.id}: {shard_counts}")
